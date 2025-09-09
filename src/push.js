@@ -7,6 +7,11 @@ let WX_PUSHER_APP_TOKEN = process.env.WX_PUSHER_APP_TOKEN;
 let telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
 let telegramBotId = process.env.TELEGRAM_CHAT_ID;
 
+// 添加 Pushplus 的配置信息
+let PUSH_PLUS_TOKEN = process.env.PUSH_PLUS_TOKEN;
+// 添加 Pushplus 群组编码配置
+let PUSHPLUS_TOPIC = process.env.PUSHPLUS_TOPIC;
+
 const pushTelegramBot = (title, desp) => {
   if (!(telegramBotToken && telegramBotId)) {
     return;
@@ -16,20 +21,20 @@ const pushTelegramBot = (title, desp) => {
     text: `${title}\n\n${desp}`,
   };
   superagent
-  .post(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`)
-  .type("form")
-  .send(data)
-  .timeout(3000)
-  .then((res) => {
-    if (res.body?.ok) {
-      logger.info("TelegramBot推送成功");
-    } else {
-      logger.error(`TelegramBot推送失败:${JSON.stringify(res.body)}`);
-    }
-  })
-  .catch((err) => {
-    logger.error(`TelegramBot推送失败:${err}`);
-  });
+    .post(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`)
+    .type("form")
+    .send(data)
+    .timeout(3000)
+    .then((res) => {
+      if (res.body?.ok) {
+        logger.info("TelegramBot推送成功");
+      } else {
+        logger.error(`TelegramBot推送失败:${JSON.stringify(res.body)}`);
+      }
+    })
+    .catch((err) => {
+      logger.error(`TelegramBot推送失败:${JSON.stringify(err)}`);
+    });
 };
 
 const pushWxPusher = (title, desp) => {
@@ -61,8 +66,43 @@ const pushWxPusher = (title, desp) => {
     });
 };
 
-const push = (title, desp) => {
-  pushTelegramBot(title, desp);
+// 修改 Pushplus 的推送函数，添加群组发送配置
+const pushPushplus = (title, desp) => {
+  if (!PUSH_PLUS_TOKEN) {
+    return;
+  }
+  const data = {
+    token: PUSH_PLUS_TOKEN,
+    title: title,
+    content: desp,
+  };
+  // 如果配置了群组编码，则添加到数据中
+  if (PUSHPLUS_TOPIC) {
+    data.topic = PUSHPLUS_TOPIC;
+  }
+  superagent
+    .post("https://www.pushplus.plus/send")
+    .send(data)
+    .timeout(3000)
+    .end((err, res) => {
+      if (err) {
+        logger.error(`Pushplus推送失败:${JSON.stringify(err)}`);
+        return;
+      }
+      const json = JSON.parse(res.text);
+      if (json.code !== 200) {
+        logger.error(`Pushplus推送失败:${JSON.stringify(json)}`);
+      } else {
+        logger.info("Pushplus推送成功");
+      }
+    });
 };
 
-exports.push = push;
+const push = (title, desp) => {
+  pushWxPusher(title, desp);
+  pushTelegramBot(title, desp);
+  // 调用 Pushplus 的推送函数
+  pushPushplus(title, desp);
+};
+
+exports.push = push;    
